@@ -39,8 +39,8 @@ export function openDB() {
 function tx(db, store, mode, fn) {
   return new Promise((resolve, reject) => {
     const t = db.transaction(store, mode);
-    const result = fn(t.objectStore(store));
-    t.oncomplete = () => resolve(result && result.__value !== undefined ? result.__value : result);
+    const holder = fn(t.objectStore(store));
+    t.oncomplete = () => resolve(holder ? holder.__value : undefined);
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error);
   });
