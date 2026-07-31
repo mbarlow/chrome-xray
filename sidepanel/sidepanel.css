@@ -276,6 +276,14 @@ textarea.body-in {
   min-height: 90px;
   resize: vertical;
 }
+.try-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 700;
+  color: var(--subtext0);
+  margin-top: 2px;
+}
 .try-actions { display: flex; gap: 6px; align-items: center; }
 .try-result { margin-top: 4px; }
 

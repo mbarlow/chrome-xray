@@ -2,6 +2,7 @@
 
 import { el, copyBtn, fmtMs, fmtBytes, fmtTime, fmtDateTime, statusClass, toCurl } from '../../lib/util.js';
 import { renderBody } from '../../lib/jsonview.js';
+import { parseSpec, importSpecDoc } from '../../lib/openapi.js';
 
 const LIST_MAX = 400;
 
@@ -71,11 +72,18 @@ export function createStreamsView(root, ctx) {
     return true;
   }
 
+  // cheap string sniff — full parse only happens in the detail view
+  function smellsLikeSpec(e) {
+    const b = e.resBody;
+    return !!b && b.includes('"paths"') && (b.includes('"openapi"') || b.includes('"swagger"'));
+  }
+
   function entryRow(e) {
     const u = safePath(e.url);
     const row = el('div', { class: 'entry-row', dataset: { id: e.id } },
       el('span', { class: `method ${e.method}` }, e.method),
       e.replayed ? el('span', { class: 'replay-mark', title: 'replayed by x-ray' }, '↻') : null,
+      smellsLikeSpec(e) ? el('span', { class: 'chip spec', title: 'response looks like an OpenAPI spec' }, 'spec') : null,
       el('span', { class: 'path', title: e.url }, '‎' + u),
       el('span', { class: `status ${statusClass(e)}` }, e.error ? 'ERR' : (e.status ?? '…')),
       el('span', { class: 'dur' }, fmtMs(e.durationMs)),
@@ -133,7 +141,32 @@ export function createStreamsView(root, ctx) {
     const reqCT = (e.reqHeaders || {})['content-type'] || '';
     const resCT = (e.resHeaders || {})['content-type'] || '';
 
+    // passive spec detection: the response body IS an OpenAPI/Swagger doc
+    let specSection = null;
+    const specDoc = parseSpec(e.resBody);
+    if (specDoc) {
+      const importBtn = el('button', { class: 'primary' }, 'Import as API spec');
+      importBtn.addEventListener('click', async () => {
+        const p = ctx.currentProfile();
+        if (!p) return;
+        importBtn.disabled = true;
+        try {
+          const r = await importSpecDoc(ctx.db, p.id, specDoc, e.url);
+          ctx.toast(`${r.title}: ${r.added} new, ${r.merged} merged`);
+          ctx.refreshApi && ctx.refreshApi();
+        } finally {
+          importBtn.disabled = false;
+        }
+      });
+      specSection = el('div', { class: 'section' },
+        el('h3', {}, 'OpenAPI spec detected'),
+        el('div', { class: 'try-actions' }, importBtn,
+          el('span', { class: 'note', style: 'font-size:10.5px;color:var(--overlay1)' },
+            (specDoc.info && specDoc.info.title) || 'this response is a spec document')));
+    }
+
     const scroll = el('div', { class: 'detail-scroll' },
+      specSection,
       el('dl', { class: 'kv-summary' },
         el('dt', {}, 'URL'), el('dd', {}, e.url, copyBtn(e.url, 'Copy URL')),
         el('dt', {}, 'Status'), el('dd', { class: `status ${statusClass(e)}` },

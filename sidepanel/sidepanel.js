@@ -113,6 +113,7 @@ for (const tab of tabs) {
 // ---- views ----
 const streams = createStreamsView(document.getElementById('view-streams'), ctx);
 const api = createApiView(document.getElementById('view-api'), ctx);
+ctx.refreshApi = () => api.refresh();
 createSettingsView(document.getElementById('view-settings'), ctx);
 
 // ---- live updates from the service worker ----

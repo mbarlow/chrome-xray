@@ -3,7 +3,7 @@
 
 import { el, copyBtn, fmtMs, fmtDateTime, statusClass } from '../../lib/util.js';
 import { renderBody } from '../../lib/jsonview.js';
-import { toOpenAPI, fromOpenAPI } from '../../lib/openapi.js';
+import { toOpenAPI, importSpecDoc, schemaSkeleton } from '../../lib/openapi.js';
 import { download, redactHeaders } from '../../lib/util.js';
 
 export function createApiView(root, ctx) {
@@ -70,29 +70,10 @@ export function createApiView(root, ctx) {
       let added = 0, mergedCount = 0;
       const titles = [];
       for (const { url: specUrl, doc } of found) {
-        const { endpoints: specEps, title } = fromOpenAPI(doc, p.id, specUrl);
-        titles.push(title);
-        for (const se of specEps) {
-          const existing = await ctx.db.getEndpoint(se.id);
-          if (existing) {
-            mergedCount++;
-            await ctx.db.putEndpoint({
-              ...se,
-              ...existing,
-              template: se.template,   // spec's param names are authoritative
-              params: se.params,
-              queryKeys: { ...se.queryKeys, ...existing.queryKeys },
-              reqSchema: existing.reqSchema || se.reqSchema,
-              resSchema: existing.resSchema || se.resSchema,
-              summary: se.summary || existing.summary,
-              specUrl: se.specUrl,
-              source: existing.count > 0 ? 'spec+observed' : 'spec',
-            });
-          } else {
-            added++;
-            await ctx.db.putEndpoint(se);
-          }
-        }
+        const r = await importSpecDoc(ctx.db, p.id, doc, specUrl);
+        titles.push(r.title);
+        added += r.added;
+        mergedCount += r.merged;
       }
       await load();
       specRow.style.display = 'none';
@@ -178,7 +159,11 @@ export function createApiView(root, ctx) {
         if (m === ep.method) o.selected = true;
         return o;
       }));
-    const urlIn = el('input', { type: 'text', value: exampleUrl(ep, examples), spellcheck: 'false' });
+    const exU = splitUrl(exampleUrl(ep, examples));
+    const urlIn = el('input', {
+      type: 'text', value: exU.base, spellcheck: 'false',
+      title: 'Path only — query string is built from the query rows below',
+    });
 
     const hdrEditor = el('div', { class: 'hdr-editor' });
     function hdrLine(k = '', v = '') {
@@ -207,7 +192,66 @@ export function createApiView(root, ctx) {
       return out;
     }
 
+    // query editor — same shape as headers; rows are authoritative for the
+    // query string, seeded from the example URL + the endpoint's known keys
+    const qryEditor = el('div', { class: 'hdr-editor' });
+    function qryLine(k = '', v = '') {
+      const line = el('div', { class: 'hdr-line' },
+        el('input', { class: 'hk-in', placeholder: 'param', value: k, spellcheck: 'false' }),
+        el('input', { class: 'hv-in', placeholder: 'value (empty = omitted)', value: v, spellcheck: 'false' }));
+      const rm = el('button', { title: 'Remove param' }, '×');
+      rm.addEventListener('click', () => line.remove());
+      line.append(rm);
+      return line;
+    }
+    const addQry = el('button', {}, '+ param');
+    addQry.addEventListener('click', () => qryEditor.insertBefore(qryLine(), addQry));
+    qryEditor.append(addQry);
+    function setQuery(pairs) {
+      for (const l of qryEditor.querySelectorAll('.hdr-line')) l.remove();
+      const seenKeys = new Set();
+      for (const [k, v] of pairs) {
+        seenKeys.add(k);
+        qryEditor.insertBefore(qryLine(k, v), addQry);
+      }
+      // known-but-unused keys from the spec/traffic become empty hint rows
+      for (const k of Object.keys(ep.queryKeys || {})) {
+        if (!seenKeys.has(k)) qryEditor.insertBefore(qryLine(k, ''), addQry);
+      }
+    }
+    function buildUrl() {
+      let target = urlIn.value;
+      const qp = new URLSearchParams();
+      for (const l of qryEditor.querySelectorAll('.hdr-line')) {
+        const k = l.querySelector('.hk-in').value.trim();
+        const v = l.querySelector('.hv-in').value;
+        if (k && v !== '') qp.append(k, v);
+      }
+      const qs = qp.toString();
+      return qs ? target + (target.includes('?') ? '&' : '?') + qs : target;
+    }
+    setQuery(exU.query);
+
     const bodyIn = el('textarea', { class: 'body-in', placeholder: 'request body (JSON or raw)', spellcheck: 'false' });
+    const bodyHint = el('div', { class: 'note', style: 'font-size:10.5px;color:var(--overlay1)' });
+    function updateBodyHint() {
+      const m = methodSel.value;
+      if (m === 'GET' || m === 'HEAD') {
+        bodyHint.textContent = `${m} sends no body — this endpoint takes query params (rows above)`;
+      } else if (ep.reqSchema) {
+        bodyHint.textContent = 'JSON body — skeleton seeded from the spec/observed schema';
+      } else {
+        bodyHint.textContent = 'request body (optional)';
+      }
+    }
+    methodSel.addEventListener('change', updateBodyHint);
+    updateBodyHint();
+    // seed the body: real example first, else a schema skeleton
+    const exBody = examples.find((x) => x.reqBody);
+    if (exBody) bodyIn.value = exBody.reqBody;
+    else if (ep.reqSchema && ep.method !== 'GET' && ep.method !== 'HEAD') {
+      bodyIn.value = JSON.stringify(schemaSkeleton(ep.reqSchema), null, 2);
+    }
     const sendBtn = el('button', { class: 'primary' }, 'Send');
     const sendNote = el('span', { class: 'note', style: 'font-size:10.5px;color:var(--overlay1)' },
       'runs in the active tab’s page context — cookies apply');
@@ -221,9 +265,9 @@ export function createApiView(root, ctx) {
         type: 'xray:replay',
         request: {
           method: methodSel.value,
-          url: urlIn.value,
+          url: buildUrl(),
           headers: getHeaders(),
-          body: bodyIn.value || null,
+          body: ['GET', 'HEAD'].includes(methodSel.value) ? null : (bodyIn.value || null),
         },
       }).catch((e) => ({ ok: false, error: String(e) }));
       sendBtn.disabled = false;
@@ -259,9 +303,12 @@ export function createApiView(root, ctx) {
       loadBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         methodSel.value = ex.method;
-        urlIn.value = ex.url;
+        const parts = splitUrl(ex.url);
+        urlIn.value = parts.base;
+        setQuery(parts.query);
         setHeaders(ex.reqHeaders || {});
         bodyIn.value = ex.reqBody || '';
+        updateBodyHint();
         ctx.toast('Loaded into form');
       });
       row.append(loadBtn);
@@ -297,8 +344,13 @@ export function createApiView(root, ctx) {
           el('h3', {}, 'Try it'),
           el('div', { class: 'try-form' },
             el('div', { class: 'try-row' }, methodSel, urlIn),
+            el('div', { class: 'try-label' }, 'Query params'),
+            qryEditor,
+            el('div', { class: 'try-label' }, 'Headers'),
             hdrEditor,
+            el('div', { class: 'try-label' }, 'Body'),
             bodyIn,
+            bodyHint,
             el('div', { class: 'try-actions' }, sendBtn, sendNote),
             result)),
         el('div', { class: 'section' },
@@ -312,7 +364,7 @@ export function createApiView(root, ctx) {
   function schemaSection(title, schema) {
     if (!schema) return null;
     const pretty = JSON.stringify(schema, null, 2);
-    const { node } = renderBody(pretty, 'application/json');
+    const { node } = renderBody(pretty, 'application/json', { collapseRoot: true });
     return el('div', { class: 'section' },
       el('h3', {}, title, el('span', { class: 'spacer' }), copyBtn(pretty, 'Copy schema')),
       el('div', { class: 'body-box' }, node));
@@ -325,6 +377,16 @@ export function createApiView(root, ctx) {
 
   function shortUrl(url) {
     try { const u = new URL(url); return u.pathname + u.search; } catch { return url; }
+  }
+
+  // { base: url-without-query, query: [[k, v], ...] }
+  function splitUrl(url) {
+    try {
+      const u = new URL(url);
+      return { base: u.origin + u.pathname, query: [...u.searchParams.entries()] };
+    } catch {
+      return { base: url, query: [] };
+    }
   }
 
   function closeDetail() {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-07-31
+
+- Passive spec detection: captured responses that are OpenAPI/Swagger docs
+  get a `spec` chip in Streams and a one-click **Import as API spec** button
+  in the entry detail.
+- Try-it form: dedicated **query params** editor (seeded from the example
+  URL + the endpoint's known keys; URL field is path-only), method-aware
+  body hints (GET/HEAD note "no body — use query params"), and JSON body
+  skeleton pre-seeded from the spec/observed schema when no real example
+  exists. GET/HEAD sends omit the body.
+- Inferred/spec schemas render collapsed by default — toggle to expand.
+
 
 ## 0.3.0 — 2026-07-31
 
