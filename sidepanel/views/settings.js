@@ -1,6 +1,7 @@
 // chrome-xray settings view: profile configuration + lifecycle.
 
 import { el } from '../../lib/util.js';
+import { collateEntry, templatize, endpointId } from '../../lib/collate.js';
 
 export function createSettingsView(root, ctx) {
   function field(labelText, input, note) {
@@ -101,6 +102,40 @@ export function createSettingsView(root, ctx) {
     root.append(el('div', { class: 'settings-group' },
       el('h3', {}, 'Danger zone'),
       el('div', { class: 'btn-row' }, clearBtn, clearEpBtn, deleteBtn)));
+
+    // -- maintenance --
+    const rebuildBtn = el('button', {}, 'Rebuild endpoints from history');
+    rebuildBtn.addEventListener('click', async () => {
+      rebuildBtn.disabled = true;
+      rebuildBtn.textContent = 'Rebuilding…';
+      try {
+        // oldest first so firstSeen and example ordering come out right
+        const entries = (await ctx.db.listEntries(p.id, Infinity)).reverse();
+        const byId = new Map();
+        let skipped = 0;
+        for (const e of entries) {
+          try {
+            const u = new URL(e.url);
+            const { template } = templatize(u.pathname);
+            const id = endpointId(p.id, e.method, u.host, template);
+            byId.set(id, collateEntry(byId.get(id) || null, e, p.id));
+          } catch { skipped++; }
+        }
+        await ctx.db.clearEndpoints(p.id);
+        for (const ep of byId.values()) await ctx.db.putEndpoint(ep);
+        await ctx.reloadProfiles(p.id);
+        ctx.toast(`Rebuilt ${byId.size} endpoints from ${entries.length} entries${skipped ? ` (${skipped} skipped)` : ''}`);
+      } finally {
+        rebuildBtn.disabled = false;
+        rebuildBtn.textContent = 'Rebuild endpoints from history';
+      }
+    });
+    root.append(el('div', { class: 'settings-group' },
+      el('h3', {}, 'Maintenance'),
+      el('div', { class: 'field' },
+        el('div', { class: 'note' },
+          'Drops current endpoint definitions and re-collates them from every stored history entry. Use after an upgrade or import.'),
+        el('div', { class: 'btn-row' }, rebuildBtn))));
 
     // -- about --
     root.append(el('div', { class: 'settings-group' },

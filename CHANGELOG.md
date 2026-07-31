@@ -1,11 +1,18 @@
 # Changelog
 
+## 0.2.0 — 2026-07-31
+
+- Settings → Maintenance: **Rebuild endpoints from history** — drops current
+  endpoint definitions and re-collates them from every stored entry. Use
+  after an upgrade (e.g. history captured under 0.1.0's broken collation)
+  or import.
 
 ## 0.1.1 — 2026-07-31
 
 - Fix: IndexedDB `get()` on a missing key resolved to a truthy internal
   holder instead of `undefined`, crashing endpoint collation on every entry
   — the API tab never populated. Also hardened missing-entry/profile reads.
+
 ## 0.1.0 — 2026-07-31
 
 Initial release.
