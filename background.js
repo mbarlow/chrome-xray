@@ -146,6 +146,38 @@ async function replayInTab(tabId, req) {
   return res && res.result;
 }
 
+// ---- OpenAPI spec discovery ----
+// Extension fetch with <all_urls> host permission bypasses CORS;
+// credentials:'include' carries cookies for auth-gated specs.
+const SPEC_PATHS = [
+  '/openapi.json', '/swagger.json', '/api-docs', '/v2/api-docs', '/v3/api-docs',
+  '/swagger/v1/swagger.json', '/api/openapi.json', '/api/swagger.json',
+  '/docs/openapi.json', '/openapi/openapi.json',
+];
+const SPEC_MAX_BYTES = 8 * 1024 * 1024;
+
+async function fetchSpec(url) {
+  try {
+    const r = await fetch(url, { credentials: 'include' });
+    if (!r.ok) return null;
+    const text = await r.text();
+    if (text.length > SPEC_MAX_BYTES) return null;
+    const doc = JSON.parse(text);
+    if ((doc.openapi || doc.swagger) && doc.paths) return { url, doc };
+  } catch { /* not a spec */ }
+  return null;
+}
+
+async function discoverSpecs(bases) {
+  const found = [];
+  for (const base of bases) {
+    const results = await Promise.all(SPEC_PATHS.map((p) => fetchSpec(base + p)));
+    const hit = results.find(Boolean); // SPEC_PATHS order = priority
+    if (hit) found.push(hit);
+  }
+  return found;
+}
+
 async function toggleOverlay(tabId) {
   try {
     const [probe] = await chrome.scripting.executeScript({
@@ -225,6 +257,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         if (tabId != null) await toggleOverlay(tabId);
         sendResponse({ ok: true });
+      })();
+      return true;
+    }
+    case 'xray:discover-spec': {
+      (async () => {
+        if (msg.url) {
+          const hit = await fetchSpec(msg.url);
+          sendResponse({ found: hit ? [hit] : [] });
+        } else {
+          sendResponse({ found: await discoverSpecs(msg.bases || []) });
+        }
       })();
       return true;
     }

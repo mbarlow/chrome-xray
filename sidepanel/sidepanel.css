@@ -256,6 +256,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
   padding: 1px 6px;
   margin: 1px 2px 1px 0;
 }
+.chip.spec { color: var(--teal); background: color-mix(in srgb, var(--teal) 14%, transparent); flex: 0 0 auto; }
 .status-chips .chip.s2 { color: var(--green); }
 .status-chips .chip.s4 { color: var(--peach); }
 .status-chips .chip.s5, .status-chips .chip.err { color: var(--red); }

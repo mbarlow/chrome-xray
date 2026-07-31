@@ -1,5 +1,16 @@
 # Changelog
 
+
+## 0.3.0 — 2026-07-31
+
+- API → **Spec**: discover a served OpenAPI/Swagger definition (auto-probe
+  common paths on known hosts, or an explicit URL) and seed the workbench
+  from it. OpenAPI 3.x + Swagger 2.0 (JSON), $ref resolution, cookies sent
+  for auth-gated specs. Spec endpoints are tagged `spec`; live traffic
+  merges into them as `spec+observed`.
+- Endpoint identity is now param-name-insensitive and NUL-separated —
+  **run Settings → Rebuild endpoints from history after upgrading** so
+  existing endpoints pick up the new ids.
 ## 0.2.0 — 2026-07-31
 
 - Settings → Maintenance: **Rebuild endpoints from history** — drops current

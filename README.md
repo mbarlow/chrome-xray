@@ -9,6 +9,7 @@ A self-defining API dev tool. Activate it on a site and it watches every fetch/X
   - **Try it** — modern-postman form: arbitrary method/URL/headers/body, sent from the active tab's page context so cookies and origin apply.
   - **Replay** — load any real history item into the form and re-fire it.
 - **Overlay** — shadow-DOM live ticker on the page itself (`Ctrl+Shift+X`), for watching calls without leaving the app.
+- **Spec discovery** — the API toolbar's **Spec** button probes known hosts for a served OpenAPI/Swagger definition (`/openapi.json`, `/v3/api-docs`, `/swagger.json`, …) or fetches an explicit URL. Found specs (OpenAPI 3.x / Swagger 2.0, JSON) seed the workbench with `spec`-tagged endpoints — schemas, params, query keys — before any traffic flows; live calls then merge observed stats into them (`spec+observed`).
 - **Profiles** — capture scoped by URL patterns. One profile per app/environment, each with its own history, endpoints, caps, and settings.
 - **Export/import** — lossless `.xray.json` to move a profile's definitions (and redacted examples) to another browser with the extension; one-way OpenAPI 3.1 export for everything else.
 

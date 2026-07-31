@@ -3,7 +3,7 @@
 
 import { el, copyBtn, fmtMs, fmtDateTime, statusClass } from '../../lib/util.js';
 import { renderBody } from '../../lib/jsonview.js';
-import { toOpenAPI } from '../../lib/openapi.js';
+import { toOpenAPI, fromOpenAPI } from '../../lib/openapi.js';
 import { download, redactHeaders } from '../../lib/util.js';
 
 export function createApiView(root, ctx) {
@@ -24,12 +24,88 @@ export function createApiView(root, ctx) {
   importBtn.addEventListener('click', () => importInput.click());
   importInput.addEventListener('change', importXray);
 
+  const specBtn = el('button', { title: 'Discover a served OpenAPI/Swagger spec and seed the API from it' }, 'Spec');
+
   const toolbar = el('div', { class: 'api-toolbar' },
-    search, el('span', { class: 'spacer' }), importBtn, exportBtn, openapiBtn, importInput);
+    search, el('span', { class: 'spacer' }), specBtn, importBtn, exportBtn, openapiBtn, importInput);
+
+  // collapsible spec-discovery row
+  const specUrlIn = el('input', {
+    type: 'text', spellcheck: 'false',
+    placeholder: 'spec url — blank = probe common paths on known hosts',
+  });
+  const specGoBtn = el('button', { class: 'primary' }, 'Fetch');
+  const specRow = el('div', { class: 'api-toolbar', style: 'display:none' }, specUrlIn, specGoBtn);
+  specBtn.addEventListener('click', () => {
+    specRow.style.display = specRow.style.display === 'none' ? '' : 'none';
+  });
+  specGoBtn.addEventListener('click', () => importSpec(specUrlIn.value.trim()));
+
+  function candidateBases() {
+    const bases = new Set();
+    for (const ep of endpoints) bases.add(`${ep.scheme}://${ep.host}`);
+    const p = ctx.currentProfile();
+    for (const pat of (p && p.patterns) || []) {
+      try { bases.add(new URL(pat.split('*')[0]).origin); } catch { /* not a URL stem */ }
+    }
+    return [...bases];
+  }
+
+  async function importSpec(url) {
+    const p = ctx.currentProfile();
+    if (!p) return;
+    specGoBtn.disabled = true;
+    specGoBtn.textContent = 'Probing…';
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: 'xray:discover-spec',
+        url: url || undefined,
+        bases: url ? undefined : candidateBases(),
+      }).catch(() => null);
+      const found = (res && res.found) || [];
+      if (!found.length) {
+        ctx.toast(url ? 'No spec at that URL' : 'No spec found on known hosts');
+        return;
+      }
+      let added = 0, mergedCount = 0;
+      const titles = [];
+      for (const { url: specUrl, doc } of found) {
+        const { endpoints: specEps, title } = fromOpenAPI(doc, p.id, specUrl);
+        titles.push(title);
+        for (const se of specEps) {
+          const existing = await ctx.db.getEndpoint(se.id);
+          if (existing) {
+            mergedCount++;
+            await ctx.db.putEndpoint({
+              ...se,
+              ...existing,
+              template: se.template,   // spec's param names are authoritative
+              params: se.params,
+              queryKeys: { ...se.queryKeys, ...existing.queryKeys },
+              reqSchema: existing.reqSchema || se.reqSchema,
+              resSchema: existing.resSchema || se.resSchema,
+              summary: se.summary || existing.summary,
+              specUrl: se.specUrl,
+              source: existing.count > 0 ? 'spec+observed' : 'spec',
+            });
+          } else {
+            added++;
+            await ctx.db.putEndpoint(se);
+          }
+        }
+      }
+      await load();
+      specRow.style.display = 'none';
+      ctx.toast(`${titles.join(', ')}: ${added} new, ${mergedCount} merged`);
+    } finally {
+      specGoBtn.disabled = false;
+      specGoBtn.textContent = 'Fetch';
+    }
+  }
 
   const list = el('div', { class: 'endpoint-list' });
   const body = el('div', { class: 'api-body' }, list);
-  root.append(toolbar, body);
+  root.append(toolbar, specRow, body);
 
   // ---- list ----
   function templateNode(tmpl) {
@@ -64,7 +140,10 @@ export function createApiView(root, ctx) {
         const row = el('div', { class: 'endpoint-row' },
           el('span', { class: `method ${ep.method}` }, ep.method),
           templateNode(ep.template),
-          el('span', { class: 'hits' }, `×${ep.count}`));
+          ep.source && ep.source.startsWith('spec')
+            ? el('span', { class: 'chip spec', title: ep.specUrl || 'from OpenAPI spec' }, 'spec')
+            : null,
+          el('span', { class: 'hits' }, ep.count ? `×${ep.count}` : ''));
         row.addEventListener('click', () => openDetail(ep));
         return row;
       });
@@ -200,8 +279,13 @@ export function createApiView(root, ctx) {
         copyBtn(`${ep.scheme}://${ep.host}${ep.template}`, 'Copy template')),
       el('div', { class: 'detail-scroll' },
         el('dl', { class: 'kv-summary' },
-          el('dt', {}, 'Observed'), el('dd', {}, `${ep.count}× · avg ${fmtMs(avg)}`),
-          el('dt', {}, 'Last seen'), el('dd', {}, fmtDateTime(ep.lastSeen)),
+          ep.summary ? el('dt', {}, 'Spec says') : null,
+          ep.summary ? el('dd', {}, ep.summary) : null,
+          ep.source ? el('dt', {}, 'Source') : null,
+          ep.source ? el('dd', { title: ep.specUrl || '' }, ep.source) : null,
+          el('dt', {}, 'Observed'), el('dd', {},
+            ep.count ? `${ep.count}× · avg ${fmtMs(avg)}` : 'spec only — not yet observed'),
+          el('dt', {}, 'Last seen'), el('dd', {}, ep.lastSeen ? fmtDateTime(ep.lastSeen) : '—'),
           el('dt', {}, 'Statuses'), el('dd', {}, statusChips),
           Object.keys(ep.queryKeys || {}).length ? el('dt', {}, 'Query keys') : null,
           Object.keys(ep.queryKeys || {}).length
