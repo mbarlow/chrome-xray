@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>X-Ray</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles/theme.css">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand" title="chrome-xray">⚡<span>x-ray</span></div>
+    <select id="profile-select" title="Profile"></select>
+    <button id="capture-toggle" class="icon-btn" title="Pause/resume this profile"></button>
+    <button id="theme-toggle" class="icon-btn" title="Theme"></button>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="streams" class="tab active">Streams</button>
+    <button data-tab="api" class="tab">API</button>
+    <button data-tab="settings" class="tab">Settings</button>
+  </nav>
+
+  <main>
+    <section id="view-streams" class="view active"></section>
+    <section id="view-api" class="view"></section>
+    <section id="view-settings" class="view"></section>
+  </main>
+
+  <div id="toast"></div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#1e1e2e"/>
+  <!-- scan brackets -->
+  <g stroke="#89b4fa" stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M30 22 h-8 a8 8 0 0 0 -8 8 v8"/>
+    <path d="M98 22 h8 a8 8 0 0 1 8 8 v8"/>
+    <path d="M30 106 h-8 a8 8 0 0 1 -8 -8 v-8"/>
+    <path d="M98 106 h8 a8 8 0 0 0 8 -8 v-8"/>
+  </g>
+  <!-- scanline -->
+  <rect x="26" y="60" width="76" height="3" rx="1.5" fill="#94e2d5" opacity="0.55"/>
+  <!-- bolt -->
+  <path d="M70 26 L44 70 h16 L56 102 L86 56 H68 Z" fill="#cba6f7" stroke="#b4befe" stroke-width="3" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,222 @@
+/* chrome-xray theme: Catppuccin Latte (light) / Mocha (dark).
+   data-theme on <html> selects; default follows prefers-color-scheme. */
+
+:root {
+  /* Latte */
+  --base: #eff1f5;
+  --mantle: #e6e9ef;
+  --crust: #dce0e8;
+  --surface0: #ccd0da;
+  --surface1: #bcc0cc;
+  --surface2: #acb0be;
+  --overlay0: #9ca0b0;
+  --overlay1: #8c8fa1;
+  --text: #4c4f69;
+  --subtext1: #5c5f77;
+  --subtext0: #6c6f85;
+  --rosewater: #dc8a78;
+  --flamingo: #dd7878;
+  --pink: #ea76cb;
+  --mauve: #8839ef;
+  --red: #d20f39;
+  --maroon: #e64553;
+  --peach: #fe640b;
+  --yellow: #df8e1d;
+  --green: #40a02b;
+  --teal: #179299;
+  --sky: #04a5e5;
+  --sapphire: #209fb5;
+  --blue: #1e66f5;
+  --lavender: #7287fd;
+
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Mocha */
+    --base: #1e1e2e;
+    --mantle: #181825;
+    --crust: #11111b;
+    --surface0: #313244;
+    --surface1: #45475a;
+    --surface2: #585b70;
+    --overlay0: #6c7086;
+    --overlay1: #7f849c;
+    --text: #cdd6f4;
+    --subtext1: #bac2de;
+    --subtext0: #a6adc8;
+    --rosewater: #f5e0dc;
+    --flamingo: #f2cdcd;
+    --pink: #f5c2e7;
+    --mauve: #cba6f7;
+    --red: #f38ba8;
+    --maroon: #eba0ac;
+    --peach: #fab387;
+    --yellow: #f9e2af;
+    --green: #a6e3a1;
+    --teal: #94e2d5;
+    --sky: #89dceb;
+    --sapphire: #74c7ec;
+    --blue: #89b4fa;
+    --lavender: #b4befe;
+  }
+}
+
+:root[data-theme="dark"] {
+  --base: #1e1e2e;
+  --mantle: #181825;
+  --crust: #11111b;
+  --surface0: #313244;
+  --surface1: #45475a;
+  --surface2: #585b70;
+  --overlay0: #6c7086;
+  --overlay1: #7f849c;
+  --text: #cdd6f4;
+  --subtext1: #bac2de;
+  --subtext0: #a6adc8;
+  --rosewater: #f5e0dc;
+  --flamingo: #f2cdcd;
+  --pink: #f5c2e7;
+  --mauve: #cba6f7;
+  --red: #f38ba8;
+  --maroon: #eba0ac;
+  --peach: #fab387;
+  --yellow: #f9e2af;
+  --green: #a6e3a1;
+  --teal: #94e2d5;
+  --sky: #89dceb;
+  --sapphire: #74c7ec;
+  --blue: #89b4fa;
+  --lavender: #b4befe;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--base);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+button {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+button:hover { background: var(--surface1); }
+button.primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--crust);
+  font-weight: 600;
+}
+button.primary:hover { filter: brightness(1.08); }
+button.danger { color: var(--red); border-color: var(--red); background: transparent; }
+button.danger:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
+
+input, select, textarea {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--mantle);
+  border: 1px solid var(--surface1);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--lavender);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface2); }
+::-webkit-scrollbar-track { background: transparent; }
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--overlay0);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.copy-btn:hover { background: var(--surface0); color: var(--text); }
+.copy-btn.copied { color: var(--green); }
+
+/* method + status badges */
+.method {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: .04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+.method.GET { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.method.POST { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.method.PUT { color: var(--peach); background: color-mix(in srgb, var(--peach) 14%, transparent); }
+.method.PATCH { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 16%, transparent); }
+.method.DELETE { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.method.OPTIONS, .method.HEAD { color: var(--overlay1); background: var(--surface0); }
+
+.status { font-family: var(--font-mono); font-weight: 600; font-size: 11px; flex: 0 0 auto; }
+.status.s2 { color: var(--green); }
+.status.s3 { color: var(--sky); }
+.status.s4 { color: var(--peach); }
+.status.s5, .status.err { color: var(--red); }
+
+/* json viewer tokens */
+.jsonview {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.jsonview .tok-body { padding-left: 14px; border-left: 1px solid var(--surface0); margin-left: 3px; }
+.jsonview .tok-line { min-width: 0; }
+.jsonview .tok-key { color: var(--blue); }
+.jsonview .tok-str { color: var(--green); }
+.jsonview .tok-num { color: var(--peach); }
+.jsonview .tok-bool { color: var(--mauve); }
+.jsonview .tok-null { color: var(--red); font-style: italic; }
+.jsonview .tok-punct { color: var(--overlay1); }
+.jsonview .tok-toggle {
+  cursor: pointer;
+  color: var(--overlay0);
+  display: inline-block;
+  width: 12px;
+  user-select: none;
+}
+.jsonview .tok-toggle:hover { color: var(--text); }
+.jsonview .tok-ellipsis {
+  color: var(--overlay0);
+  cursor: pointer;
+  font-style: italic;
+}
+.body-plain {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+.body-empty { color: var(--overlay0); font-style: italic; font-size: 12px; }
