@@ -18,7 +18,7 @@ export function createStreamsView(root, ctx) {
 
   const methodSel = el('select', {},
     el('option', { value: '' }, 'method'),
-    ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'].map((m) => el('option', { value: m }, m)));
+    ...['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'WS'].map((m) => el('option', { value: m }, m)));
   methodSel.addEventListener('change', () => { filter.method = methodSel.value; renderList(); });
 
   const statusSel = el('select', {},
@@ -61,10 +61,11 @@ export function createStreamsView(root, ctx) {
       else if (!e.status || String(e.status)[0] !== filter.status) return false;
     }
     if (filter.q) {
-      const hay = [
-        e.url, e.reqBody, e.resBody,
-        JSON.stringify(e.reqHeaders || {}), JSON.stringify(e.resHeaders || {}),
-      ].join(' ').toLowerCase();
+      const hay = (e.api === 'ws'
+        ? [e.url, e.pageUrl]
+        : [e.url, e.reqBody, e.resBody,
+          JSON.stringify(e.reqHeaders || {}), JSON.stringify(e.resHeaders || {})]
+      ).join(' ').toLowerCase();
       for (const term of filter.q.split(/\s+/).filter(Boolean)) {
         if (!hay.includes(term)) return false;
       }
@@ -78,15 +79,29 @@ export function createStreamsView(root, ctx) {
     return !!b && b.includes('"paths"') && (b.includes('"openapi"') || b.includes('"swagger"'));
   }
 
+  function wsStatus(e) {
+    switch (e.wsState) {
+      case 'open': return { cls: 's2', label: 'OPEN' };
+      case 'closed': return { cls: 's3', label: 'CLOSED' };
+      case 'error': return { cls: 'err', label: 'ERR' };
+      default: return { cls: 's3', label: '…' };
+    }
+  }
+
   function entryRow(e) {
     const u = safePath(e.url);
+    const isWs = e.api === 'ws';
+    const ws = isWs ? wsStatus(e) : null;
+    const wsFrames = isWs ? (e.frameCount?.in || 0) + (e.frameCount?.out || 0) : 0;
     const row = el('div', { class: 'entry-row', dataset: { id: e.id } },
       el('span', { class: `method ${e.method}` }, e.method),
       e.replayed ? el('span', { class: 'replay-mark', title: 'replayed by x-ray' }, '↻') : null,
       smellsLikeSpec(e) ? el('span', { class: 'chip spec', title: 'response looks like an OpenAPI spec' }, 'spec') : null,
       el('span', { class: 'path', title: e.url }, '‎' + u),
-      el('span', { class: `status ${statusClass(e)}` }, e.error ? 'ERR' : (e.status ?? '…')),
-      el('span', { class: 'dur' }, fmtMs(e.durationMs)),
+      isWs
+        ? el('span', { class: `status ${ws.cls}` }, ws.label)
+        : el('span', { class: `status ${statusClass(e)}` }, e.error ? 'ERR' : (e.status ?? '…')),
+      el('span', { class: 'dur' }, isWs ? `⇅${wsFrames}` : fmtMs(e.durationMs)),
       el('span', { class: 'when' }, fmtTime(e.ts || e.startedAt)),
     );
     row.addEventListener('click', () => openDetail(e));
@@ -135,9 +150,62 @@ export function createStreamsView(root, ctx) {
       truncated ? el('div', { class: 'trunc-note' }, `⚠ truncated at capture cap`) : null);
   }
 
-  function openDetail(e) {
-    detailEntry = e;
+  function openWsDetail(e) {
     closeDetail();
+    detailEntry = e;
+    const ws = wsStatus(e);
+    const frames = e.frames || [];
+    const shown = frames.slice(-50);
+
+    const frameRows = shown.map((f) => {
+      const { node, pretty } = f.data != null
+        ? renderBody(f.data, '')
+        : { node: el('div', { class: 'body-empty' }, `[${f.note || 'binary'}]`), pretty: '' };
+      return el('div', { class: `ws-frame ${f.dir}` },
+        el('div', { class: 'ws-frame-head' },
+          el('span', { class: 'dir' }, f.dir === 'out' ? '→ out' : '← in'),
+          el('span', {}, fmtTime(f.ts)),
+          el('span', {}, fmtBytes(f.size)),
+          f.truncated ? el('span', { class: 'trunc-note' }, '⚠ truncated') : null,
+          el('span', { class: 'spacer', style: 'flex:1' }),
+          f.data != null ? copyBtn(() => pretty, 'Copy frame') : null),
+        el('div', { class: 'body-box' }, node));
+    });
+
+    const back = el('button', { class: 'back' }, '← back');
+    back.addEventListener('click', closeDetail);
+    const detail = el('div', { class: 'detail' },
+      el('div', { class: 'detail-header' },
+        back,
+        el('span', { class: 'method WS' }, 'WS'),
+        el('span', { class: 'title' }, safePath(e.url)),
+        copyBtn(e.url, 'Copy URL')),
+      el('div', { class: 'detail-scroll' },
+        el('dl', { class: 'kv-summary' },
+          el('dt', {}, 'URL'), el('dd', {}, e.url, copyBtn(e.url, 'Copy URL')),
+          el('dt', {}, 'State'), el('dd', { class: `status ${ws.cls}` },
+            e.wsState + (e.closeCode != null ? ` (${e.closeCode}${e.closeReason ? ` ${e.closeReason}` : ''})` : '')),
+          el('dt', {}, 'Opened'), el('dd', {}, fmtDateTime(e.ts || e.startedAt)),
+          e.durationMs != null ? el('dt', {}, 'Duration') : null,
+          e.durationMs != null ? el('dd', {}, fmtMs(e.durationMs)) : null,
+          el('dt', {}, 'Frames'), el('dd', {},
+            `→ ${e.frameCount?.out || 0} (${fmtBytes(e.bytes?.out || 0)}) · ← ${e.frameCount?.in || 0} (${fmtBytes(e.bytes?.in || 0)})`),
+        ),
+        el('div', { class: 'section' },
+          el('h3', {}, 'Frames'),
+          frames.length > shown.length
+            ? el('div', { class: 'body-empty' }, `showing last ${shown.length} of ${frames.length} kept`)
+            : null,
+          frameRows.length ? el('div', {}, ...frameRows)
+            : el('div', { class: 'body-empty' }, '∅ no frames yet'))));
+    detail.dataset.detail = '1';
+    body.append(detail);
+  }
+
+  function openDetail(e) {
+    if (e.api === 'ws') { openWsDetail(e); return; }
+    closeDetail();
+    detailEntry = e;
     const reqCT = (e.reqHeaders || {})['content-type'] || '';
     const resCT = (e.resHeaders || {})['content-type'] || '';
 
@@ -200,6 +268,7 @@ export function createStreamsView(root, ctx) {
   }
 
   function closeDetail() {
+    detailEntry = null;
     for (const d of body.querySelectorAll('[data-detail]')) d.remove();
   }
 
@@ -218,6 +287,21 @@ export function createStreamsView(root, ctx) {
       entries.unshift(entry);
       if (entries.length > LIST_MAX + 100) entries.length = LIST_MAX;
       if (!paused) renderList();
+    },
+    onEntryUpdated(entry) {
+      const i = entries.findIndex((x) => x.id === entry.id);
+      if (i >= 0) entries[i] = entry;
+      else entries.unshift(entry);
+      const reopen = detailEntry && detailEntry.id === entry.id;
+      if (!paused && !reopen) renderList();
+      if (reopen) {
+        // live-refresh the open detail, preserving scroll
+        const scrollEl = body.querySelector('.detail-scroll');
+        const st = scrollEl ? scrollEl.scrollTop : 0;
+        openDetail(entry);
+        const ns = body.querySelector('.detail-scroll');
+        if (ns) ns.scrollTop = st;
+      }
     },
     refresh: load,
   };

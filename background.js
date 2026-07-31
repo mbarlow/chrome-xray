@@ -33,7 +33,86 @@ async function notifyMatchingTabs(patternsProfile) {
   }
 }
 
+// ---- WebSocket ops: one entry per connection, mutated by op messages ----
+const WS_FRAMES_MAX = 200;
+// serialize read-modify-write per connection
+const wsQueue = new Map();
+// throttle entry-updated broadcasts (chatty sockets)
+const wsPendingBroadcast = new Map();
+let wsBroadcastTimer = null;
+
+function queueWs(connId, fn) {
+  const next = (wsQueue.get(connId) || Promise.resolve()).then(fn).catch(() => {});
+  wsQueue.set(connId, next);
+  return next;
+}
+
+function broadcastWsUpdate(entry) {
+  wsPendingBroadcast.set(entry.id, entry);
+  if (wsBroadcastTimer) return;
+  wsBroadcastTimer = setTimeout(() => {
+    wsBroadcastTimer = null;
+    for (const e of wsPendingBroadcast.values()) {
+      broadcast({ type: 'xray:entry-updated', entry: e });
+    }
+    wsPendingBroadcast.clear();
+  }, 250);
+}
+
+async function handleWsOp(op, sender) {
+  const tabId = sender.tab && sender.tab.id;
+
+  if (op.wsOp === 'open') {
+    let profileId = tabId != null ? tabProfile.get(tabId) : null;
+    if (!profileId) {
+      const profile = await findMatch(op.pageUrl || op.url);
+      if (!profile) return;
+      profileId = profile.id;
+      if (tabId != null) tabProfile.set(tabId, profileId);
+    }
+    const entry = {
+      id: op.connId, profileId, tabId,
+      api: 'ws', method: 'WS',
+      url: op.url, pageUrl: op.pageUrl,
+      ts: op.startedAt || Date.now(), startedAt: op.startedAt,
+      wsState: 'connecting',
+      frames: [], frameCount: { in: 0, out: 0 }, bytes: { in: 0, out: 0 },
+    };
+    await queueWs(op.connId, () => db.addEntry(entry));
+    broadcast({ type: 'xray:new-entry', entry });
+    if (tabId != null) chrome.tabs.sendMessage(tabId, { type: 'xray:new-entry', entry }).catch(() => {});
+    return;
+  }
+
+  await queueWs(op.connId, async () => {
+    const entry = await db.getEntry(op.connId);
+    if (!entry) return; // connection opened before capture was active
+    if (op.wsOp === 'frame') {
+      entry.frames.push({ dir: op.dir, ts: op.ts, ...op.frame });
+      if (entry.frames.length > WS_FRAMES_MAX) {
+        entry.frames.splice(0, entry.frames.length - WS_FRAMES_MAX);
+      }
+      entry.frameCount[op.dir] = (entry.frameCount[op.dir] || 0) + 1;
+      entry.bytes[op.dir] = (entry.bytes[op.dir] || 0) + (op.frame.size || 0);
+    } else if (op.wsOp === 'state') {
+      entry.wsState = op.state;
+    } else if (op.wsOp === 'close') {
+      entry.wsState = 'closed';
+      entry.closeCode = op.code;
+      entry.closeReason = op.reason;
+      entry.wasClean = op.wasClean;
+      entry.durationMs = op.ts - (entry.startedAt || entry.ts);
+    } else if (op.wsOp === 'error') {
+      entry.wsState = 'error';
+      entry.error = 'websocket error';
+    }
+    await db.addEntry(entry);
+    broadcastWsUpdate(entry);
+  });
+}
+
 async function handleEntry(entry, sender) {
+  if (entry.wsOp) return handleWsOp(entry, sender);
   const tabId = sender.tab && sender.tab.id;
   let profileId = tabId != null ? tabProfile.get(tabId) : null;
   if (!profileId) {

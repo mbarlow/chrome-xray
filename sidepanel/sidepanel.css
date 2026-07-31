@@ -196,6 +196,27 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
   font-size: 11.5px;
 }
 
+/* websocket frames */
+.ws-frame {
+  margin-bottom: 8px;
+  border-left: 2px solid var(--lavender);
+  padding-left: 8px;
+}
+.ws-frame.in { border-left-color: var(--teal); }
+.ws-frame-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--overlay1);
+  margin-bottom: 3px;
+}
+.ws-frame-head .dir { font-weight: 700; }
+.ws-frame.out .dir { color: var(--lavender); }
+.ws-frame.in .dir { color: var(--teal); }
+.ws-frame .body-box { padding: 5px 8px; max-height: 200px; }
+
 /* ---- api view ---- */
 .api-toolbar {
   display: flex;

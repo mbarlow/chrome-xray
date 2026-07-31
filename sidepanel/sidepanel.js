@@ -121,6 +121,8 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!msg) return;
   if (msg.type === 'xray:new-entry') {
     if (msg.entry.profileId === state.profileId) streams.onEntry(msg.entry);
+  } else if (msg.type === 'xray:entry-updated') {
+    if (msg.entry.profileId === state.profileId) streams.onEntryUpdated(msg.entry);
   } else if (msg.type === 'xray:endpoint-updated') {
     if (msg.profileId === state.profileId) api.scheduleRefresh();
   } else if (msg.type === 'xray:profiles-changed') {

@@ -166,6 +166,65 @@
     );
   };
 
+  // ---- WebSocket ----
+  // One connection = one entry, updated by ws-op messages: open/state/frame/close/error.
+  const WS_FRAME_CAP = 16384;
+  const wsMeta = new WeakMap();
+
+  function wsSerialize(data) {
+    if (typeof data === 'string') {
+      return data.length > WS_FRAME_CAP
+        ? { data: data.slice(0, WS_FRAME_CAP), truncated: true, size: data.length }
+        : { data, truncated: false, size: data.length };
+    }
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+      return { data: null, note: `Blob ${data.size}B ${data.type || ''}`.trim(), size: data.size };
+    }
+    if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+      return { data: null, note: `binary ${data.byteLength}B`, size: data.byteLength };
+    }
+    return { data: null, note: typeof data, size: 0 };
+  }
+
+  function wsFrame(m, dir, data) {
+    emit({ wsOp: 'frame', connId: m.id, dir, ts: Date.now(), frame: wsSerialize(data) });
+  }
+
+  function wsInstrument(ws, rawUrl) {
+    const url = absolute(rawUrl);
+    if (!/^wss?:/.test(url)) return;
+    const m = { id: 'ws-' + uid() };
+    wsMeta.set(ws, m);
+    emit({
+      wsOp: 'open', connId: m.id, api: 'ws', method: 'WS',
+      url, pageUrl: location.href, startedAt: Date.now(),
+    });
+    ws.addEventListener('open', () => emit({ wsOp: 'state', connId: m.id, state: 'open', ts: Date.now() }));
+    ws.addEventListener('message', (e) => { try { wsFrame(m, 'in', e.data); } catch { /* ignore */ } });
+    ws.addEventListener('close', (e) => emit({
+      wsOp: 'close', connId: m.id, code: e.code, reason: e.reason, wasClean: e.wasClean, ts: Date.now(),
+    }));
+    ws.addEventListener('error', () => emit({ wsOp: 'error', connId: m.id, ts: Date.now() }));
+  }
+
+  const OrigWS = window.WebSocket;
+  if (OrigWS && OrigWS.prototype) {
+    const origWsSend = OrigWS.prototype.send;
+    OrigWS.prototype.send = function (data) {
+      const m = wsMeta.get(this);
+      if (m) { try { wsFrame(m, 'out', data); } catch { /* ignore */ } }
+      return origWsSend.call(this, data);
+    };
+    // Proxy keeps instanceof, statics (OPEN/CLOSED...), and subclassing intact.
+    window.WebSocket = new Proxy(OrigWS, {
+      construct(target, args, newTarget) {
+        const ws = Reflect.construct(target, args, newTarget);
+        try { wsInstrument(ws, args[0]); } catch { /* never break the page */ }
+        return ws;
+      },
+    });
+  }
+
   // ---- XMLHttpRequest ----
   const XHR = XMLHttpRequest.prototype;
   const origOpen = XHR.open;

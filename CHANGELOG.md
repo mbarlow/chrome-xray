@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-07-31
+
+- WebSocket capture: a Proxy over `window.WebSocket` + a `send` prototype
+  patch record each connection as one live-updating entry — state, close
+  code/reason, per-direction frame/byte counts, last 200 frames (16 KB cap
+  each, binary noted by size). WS filter in Streams, frame timeline detail
+  view with per-frame copy, throttled live updates (250 ms). Streams-only;
+  sockets don't collate into the API workbench.
+
 ## 0.4.0 — 2026-07-31
 
 - Passive spec detection: captured responses that are OpenAPI/Swagger docs

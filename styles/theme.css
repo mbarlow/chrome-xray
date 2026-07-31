@@ -177,6 +177,7 @@ input:focus, select:focus, textarea:focus {
 .method.PATCH { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 16%, transparent); }
 .method.DELETE { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
 .method.OPTIONS, .method.HEAD { color: var(--overlay1); background: var(--surface0); }
+.method.WS { color: var(--pink); background: color-mix(in srgb, var(--pink) 14%, transparent); }
 
 .status { font-family: var(--font-mono); font-weight: 600; font-size: 11px; flex: 0 0 auto; }
 .status.s2 { color: var(--green); }
