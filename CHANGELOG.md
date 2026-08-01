@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-08-01
 
 - Settings opens with a **Profiles** list: every profile with its capture
   state, entry count and patterns. Click to select, ✕ to delete (with all
