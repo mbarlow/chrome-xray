@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chrome X-Ray",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "See through any web app: capture fetch/XHR streams, collate live traffic into an interactive API workbench, replay and test calls in page context",
   "minimum_chrome_version": "116",
   "permissions": [
