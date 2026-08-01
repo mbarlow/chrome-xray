@@ -4,6 +4,10 @@ import { el } from '../../lib/util.js';
 import { collateEntry, templatize, endpointId } from '../../lib/collate.js';
 
 export function createSettingsView(root, ctx) {
+  // id of the profile awaiting a second click to confirm deletion
+  let pendingDelete = null;
+  let renderToken = 0;
+
   function field(labelText, input, note) {
     return el('div', { class: 'field' },
       el('label', {}, labelText),
@@ -11,9 +15,83 @@ export function createSettingsView(root, ctx) {
       note ? el('div', { class: 'note' }, note) : null);
   }
 
+  // Tabs still capturing under a removed/renamed profile re-handshake and drop it.
+  async function resyncTabs() {
+    chrome.runtime.sendMessage({ type: 'xray:profiles-changed-by-panel' }).catch(() => {});
+    const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+    for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'xray:state-changed' }).catch(() => {});
+  }
+
+  async function removeProfile(profile) {
+    await ctx.db.deleteProfile(profile.id);
+    pendingDelete = null;
+    await ctx.reloadProfiles();
+    await resyncTabs();
+    ctx.toast(`Deleted "${profile.name}"`);
+  }
+
+  // -- profile list: pick or delete any profile, not just the selected one --
+  function profileList(current) {
+    const profiles = ctx.allProfiles();
+    if (!profiles.length) {
+      return el('div', { class: 'settings-group' },
+        el('h3', {}, 'Profiles'),
+        el('div', { class: 'body-empty' }, 'No profiles yet. Activate a site from the popup or create one below.'));
+    }
+
+    const token = ++renderToken;
+    const metaEls = new Map();
+    const rows = profiles.map((p) => {
+      const active = current && p.id === current.id;
+      const meta = el('div', { class: 'profile-meta' }, (p.patterns || []).join(' ') || 'no patterns');
+      metaEls.set(p.id, meta);
+      const pick = el('button', { class: 'profile-pick', title: 'Select this profile' },
+        el('div', { class: 'profile-name' }, `${p.enabled ? '●' : '○'} ${p.name}`),
+        meta);
+      pick.addEventListener('click', () => {
+        pendingDelete = null;
+        ctx.selectProfile(p.id);   // triggers re-render via onProfileChange
+      });
+
+      let actions;
+      if (pendingDelete === p.id) {
+        const yes = el('button', { class: 'danger' }, 'Delete');
+        yes.addEventListener('click', () => { removeProfile(p); });
+        const no = el('button', {}, 'Cancel');
+        no.addEventListener('click', () => { pendingDelete = null; render(); });
+        actions = el('div', { class: 'profile-actions' }, yes, no);
+      } else {
+        const del = el('button', { class: 'danger icon-btn', title: `Delete "${p.name}" and all its data` }, '✕');
+        del.addEventListener('click', () => { pendingDelete = p.id; render(); });
+        actions = el('div', { class: 'profile-actions' }, del);
+      }
+
+      return el('div', { class: `profile-row${active ? ' active' : ''}` }, pick, actions);
+    });
+
+    // counts are async; fill them in once, unless a newer render superseded us
+    (async () => {
+      for (const p of profiles) {
+        const n = await ctx.db.countEntries(p.id).catch(() => null);
+        if (token !== renderToken) return;
+        const node = metaEls.get(p.id);
+        if (node && n != null) {
+          node.textContent = `${n} ${n === 1 ? 'entry' : 'entries'} · ${(p.patterns || []).join(' ') || 'no patterns'}`;
+        }
+      }
+    })();
+
+    return el('div', { class: 'settings-group' },
+      el('h3', {}, 'Profiles'),
+      el('div', { class: 'profile-list' }, ...rows),
+      el('div', { class: 'note' }, 'Click a profile to select it. ✕ deletes it with all its history and endpoints.'));
+  }
+
   function render() {
     root.replaceChildren();
     const p = ctx.currentProfile();
+    if (pendingDelete && !ctx.allProfiles().some((x) => x.id === pendingDelete)) pendingDelete = null;
+    root.append(profileList(p));
 
     // -- new profile --
     const newName = el('input', { type: 'text', placeholder: 'name (e.g. myapp staging)' });
@@ -64,8 +142,7 @@ export function createSettingsView(root, ctx) {
       p.enabled = enabledIn.checked;
       await ctx.db.putProfile(p);
       await ctx.reloadProfiles(p.id);
-      const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
-      for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'xray:state-changed' }).catch(() => {});
+      await resyncTabs();
       ctx.toast('Profile saved');
     });
 
@@ -92,12 +169,22 @@ export function createSettingsView(root, ctx) {
       await ctx.reloadProfiles(p.id);
       ctx.toast('Endpoints cleared');
     });
+    // window.confirm() is suppressed in the side panel, so confirm in place
     const deleteBtn = el('button', { class: 'danger' }, 'Delete profile');
+    let armed = false;
+    let armTimer = null;
     deleteBtn.addEventListener('click', async () => {
-      if (!confirm(`Delete profile "${p.name}" and all its data?`)) return;
-      await ctx.db.deleteProfile(p.id);
-      await ctx.reloadProfiles();
-      ctx.toast('Profile deleted');
+      if (!armed) {
+        armed = true;
+        deleteBtn.textContent = 'Click again to delete';
+        armTimer = setTimeout(() => {
+          armed = false;
+          deleteBtn.textContent = 'Delete profile';
+        }, 4000);
+        return;
+      }
+      clearTimeout(armTimer);
+      await removeProfile(p);
     });
     root.append(el('div', { class: 'settings-group' },
       el('h3', {}, 'Danger zone'),

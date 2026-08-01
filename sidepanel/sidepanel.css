@@ -325,11 +325,45 @@ textarea.body-in {
 }
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
 .field label { font-size: 11.5px; color: var(--subtext1); font-weight: 600; }
-.field .note { font-size: 10.5px; color: var(--overlay1); }
+.field .note, .settings-group > .note { font-size: 10.5px; color: var(--overlay1); }
 .field input[type="text"], .field input[type="number"], .field textarea { width: 100%; }
 .field-inline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .field-inline label { font-size: 12px; }
 .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* profile list */
+.profile-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--surface0);
+  border-radius: 8px;
+  padding: 4px 6px 4px 8px;
+  background: var(--base);
+}
+.profile-row.active { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, var(--base)); }
+.profile-pick {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+}
+.profile-pick:hover { background: transparent; }
+.profile-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.profile-meta {
+  font-size: 10.5px;
+  color: var(--overlay1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profile-actions { display: flex; gap: 4px; flex: 0 0 auto; }
+.profile-actions button { font-size: 11px; padding: 3px 8px; }
+.profile-actions .icon-btn { padding: 3px 7px; line-height: 1; }
 
 /* toast */
 #toast {
