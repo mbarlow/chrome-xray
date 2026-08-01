@@ -29,8 +29,19 @@ function toast(msg) {
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
 }
 
+function allProfiles() { return state.profiles; }
+
+function selectProfile(id) {
+  if (!state.profiles.some((p) => p.id === id)) return;
+  state.profileId = id;
+  renderProfileBar();
+  emitProfileChange();
+}
+
 const ctx = {
   currentProfile,
+  allProfiles,
+  selectProfile,
   onProfileChange,
   toast,
   reloadProfiles,   // settings view mutates profiles

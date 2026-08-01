@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Settings opens with a **Profiles** list: every profile with its capture
+  state, entry count and patterns. Click to select, ✕ to delete (with all
+  its history and endpoints) behind a one-click inline confirm.
+- Delete no longer goes through `window.confirm()`, which the side panel
+  suppresses — the danger-zone button arms on first click instead. Deleting
+  re-syncs open tabs so nothing keeps capturing under a removed profile.
+
 ## 0.5.0 — 2026-07-31
 
 - WebSocket capture: a Proxy over `window.WebSocket` + a `send` prototype
